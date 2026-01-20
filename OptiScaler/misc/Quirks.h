@@ -194,6 +194,15 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("starfield.exe", GameQuirk::DisableFSR2Inputs, GameQuirk::DisableFSR3Inputs,
                 GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceAutoExposure),
 
+    // Nixxes Sony ports - Dxgi spoofing disabled due to RT crashes
+    //
+    // Ratchet & Clank: Rift Apart, Marvel’s Spider-Man Remastered, Marvel’s Spider-Man: Miles Morales, Marvel's
+    // Spider-Man 2
+    QUIRK_ENTRY("riftapart.exe", GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("spider-man.exe", GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("milesmorales.exe", GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("spider-man2.exe", GameQuirk::DisableDxgiSpoofing),
+
     // SL spoof enough to unlock everything DLSS/No spoof needed for DLSS inputs
     //
     // The Witcher 3, Alan Wake 2, Crysis 3 Remastered, Marvel's Guardians of the Galaxy, UNCHARTED: Legacy of Thieves
