@@ -144,18 +144,7 @@ static bool CreateBufferResource(ID3D12Device* InDevice, ID3D12Resource* InResou
     }
 
     HRESULT hr;
-
-    // D3D12_HEAP_PROPERTIES heapProperties;
-    // D3D12_HEAP_FLAGS heapFlags;
-    // hr = InResource->GetHeapProperties(&heapProperties, &heapFlags);
-    // if (hr != S_OK)
-    //{
-    //     LOG_ERROR("GetHeapProperties result: {:X}", (UINT64) hr);
-    //     return false;
-    // }
-
     CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_DEFAULT);
-
     inDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
     hr = InDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &inDesc, InState, nullptr,
