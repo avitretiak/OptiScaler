@@ -265,11 +265,18 @@ static const QuirkEntry quirkTable[] = {
 
     // FSR2 only, no spoof needed
     //
-    // Tiny Tina's Wonderlands, Dead Island 2, The Outer Worlds: Spacer's Choice Edition
+    // Tiny Tina's Wonderlands, Dead Island 2, The Outer Worlds: Spacer's Choice Edition, Scorn, Thymesia, Company of
+    // Heroes 3, Caravan Sandwitch, Asterigos: Curse of the Stars, Saints Row (2022)
     QUIRK_ENTRY("wonderlands.exe", GameQuirk::DisableReactiveMasks, GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY_UE(deadisland, GameQuirk::DisableReactiveMasks, GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY_UE(indiana, GameQuirk::DisableReactiveMasks, GameQuirk::DisableDxgiSpoofing,
                    GameQuirk::ForceAutoExposure),
+    QUIRK_ENTRY_UE(scorn, GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY_UE(plagueproject, GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("reliccoh3.exe", GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY_UE(caravansandwitch, GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY_UE(genesis, GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("saintsrow_dx12.exe", GameQuirk::DisableDxgiSpoofing),
 
     // Disable FSR2/3 inputs due to crashing/custom implementations
     //
