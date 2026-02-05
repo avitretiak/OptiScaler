@@ -532,7 +532,7 @@ bool FSR31FeatureVkOn12::Evaluate(::VkCommandBuffer InCmdBuffer, NVSDK_NGX_Param
     } while (false);
 
     _frameCount++;
-    //Dx12CommandQueue->Signal(Dx12Fence, _frameCount);
+    // Dx12CommandQueue->Signal(Dx12Fence, _frameCount);
 
     return evalResult;
 }
