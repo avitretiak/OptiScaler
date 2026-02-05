@@ -1123,6 +1123,8 @@ void MenuCommon::AddVulkanBackends(std::string* code, std::string* name)
     else if (Config::Instance()->DLSSEnabled.value_or_default() &&
              (State::Instance().newBackend == "dlss" || (State::Instance().newBackend == "" && *code == "dlss")))
         selectedUpscalerName = "DLSS";
+    else if (State::Instance().newBackend == "fsr31_12" || (State::Instance().newBackend == "" && *code == "fsr31_12"))
+        selectedUpscalerName = "FSR 3.X w/Dx12";
     else
         selectedUpscalerName = "FSR 2.2.1";
 
@@ -1142,6 +1144,9 @@ void MenuCommon::AddVulkanBackends(std::string* code, std::string* name)
 
         if (Config::Instance()->DLSSEnabled.value_or_default() && ImGui::Selectable("DLSS", *code == "dlss"))
             State::Instance().newBackend = "dlss";
+
+        if (ImGui::Selectable("FSR 3.X w/Dx12", *code == "fsr31_12"))
+            State::Instance().newBackend = "fsr31_12";
 
         ImGui::EndCombo();
     }
