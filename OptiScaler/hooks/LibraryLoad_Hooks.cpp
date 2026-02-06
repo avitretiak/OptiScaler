@@ -16,7 +16,7 @@
 #include <inputs/FfxApiExe_Dx12.h>
 
 #include <spoofing/Dxgi_Spoofing.h>
-#include <spoofing/Vulkan_Spoofing.h>
+// #include <spoofing/Vulkan_Spoofing.h>
 
 #include <hooks/Dxgi_Hooks.h>
 #include <hooks/D3D11_Hooks.h>
@@ -358,9 +358,9 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
 
         if (module != nullptr)
         {
-            VulkanSpoofing::HookForVulkanSpoofing(module);
-            VulkanSpoofing::HookForVulkanExtensionSpoofing(module);
-            VulkanSpoofing::HookForVulkanVRAMSpoofing(module);
+            // VulkanSpoofing::HookForVulkanSpoofing(module);
+            // VulkanSpoofing::HookForVulkanExtensionSpoofing(module);
+            // VulkanSpoofing::HookForVulkanVRAMSpoofing(module);
 
             VulkanHooks::Hook(module);
         }
