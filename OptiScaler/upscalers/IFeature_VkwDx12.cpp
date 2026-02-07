@@ -1621,8 +1621,8 @@ bool IFeature_VkwDx12::CopyBackOutput()
         AddVkBarrier(&vkReactive);
 
         vkCmdPipelineBarrier(VulkanCopyCommandBuffer[frame], VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, imageBarriers.size(),
-                             imageBarriers.data());
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr,
+                             static_cast<uint32_t>(imageBarriers.size()), imageBarriers.data());
 
         if (!Config::Instance()->VulkanUseCopyForOutput.value_or_default())
         {
