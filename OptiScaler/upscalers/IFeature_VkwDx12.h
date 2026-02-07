@@ -117,6 +117,7 @@ class IFeature_VkwDx12 : public virtual IFeature_Vk
     bool LoadVulkanExternalMemoryFunctions();
     bool CreateVulkanCopyCommandBuffer();
     bool CreateSharedFenceSemaphore();
+    void RecreateCommandBuffersForQueueFamily(uint32_t queueFamily);
 
     void ReleaseSharedResources();
     void ReleaseSyncResources();

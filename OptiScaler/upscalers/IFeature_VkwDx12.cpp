@@ -767,14 +767,12 @@ bool IFeature_VkwDx12::CopyTextureFromVkToDx12(VkCommandBuffer InCmdBuffer, NVSD
         OutResource->VkSharedImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         OutResource->VkSharedImageAccess = VK_ACCESS_NONE;
 
-        LOG_DEBUG("Successfully created shared texture");
-
         // Verify the resource descriptor
         D3D12_RESOURCE_DESC actualDesc = OutResource->Dx12Resource->GetDesc();
-        LOG_DEBUG("D3D12 resource: {}x{}, format={} ({}) (VK: {}x{}, {} ({}))", actualDesc.Width, actualDesc.Height,
-                  magic_enum::enum_name(actualDesc.Format), (int) actualDesc.Format,
-                  InParam->Resource.ImageViewInfo.Width, InParam->Resource.ImageViewInfo.Height,
-                  magic_enum::enum_name(InParam->Resource.ImageViewInfo.Format),
+        LOG_DEBUG("Successfully created shared D3D12 resource: {}x{}, format={} ({}) (VK: {}x{}, {} ({}))",
+                  actualDesc.Width, actualDesc.Height, magic_enum::enum_name(actualDesc.Format),
+                  (int) actualDesc.Format, InParam->Resource.ImageViewInfo.Width,
+                  InParam->Resource.ImageViewInfo.Height, magic_enum::enum_name(InParam->Resource.ImageViewInfo.Format),
                   (int) InParam->Resource.ImageViewInfo.Format);
     }
 
@@ -794,9 +792,9 @@ bool IFeature_VkwDx12::CopyTextureFromVkToDx12(VkCommandBuffer InCmdBuffer, NVSD
     {
         if (isDepthFormat)
         {
-            //LOG_DEBUG("Using DepthTransfer_Vk for format: {} ({})",
-            //          magic_enum::enum_name(InParam->Resource.ImageViewInfo.Format),
-            //          (int) InParam->Resource.ImageViewInfo.Format);
+            // LOG_DEBUG("Using DepthTransfer_Vk for format: {} ({})",
+            //           magic_enum::enum_name(InParam->Resource.ImageViewInfo.Format),
+            //           (int) InParam->Resource.ImageViewInfo.Format);
 
             if (!DT->CanRender())
             {
@@ -804,18 +802,33 @@ bool IFeature_VkwDx12::CopyTextureFromVkToDx12(VkCommandBuffer InCmdBuffer, NVSD
                 return false;
             }
 
-            VkImageMemoryBarrier imageBarrier = {};
-            imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            imageBarrier.oldLayout = OutResource->VkSharedImageLayout;
-            imageBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-            imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            imageBarrier.image = OutResource->VkSharedImage;
-            imageBarrier.subresourceRange = InParam->Resource.ImageViewInfo.SubresourceRange;
-            imageBarrier.srcAccessMask = OutResource->VkSharedImageAccess;
-            imageBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            VkImageMemoryBarrier imageBarriers[2] = {};
+            imageBarriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imageBarriers[0].oldLayout = OutResource->VkSharedImageLayout;
+            imageBarriers[0].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            imageBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imageBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imageBarriers[0].image = OutResource->VkSharedImage;
+            imageBarriers[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imageBarriers[0].subresourceRange.baseMipLevel = 0;
+            imageBarriers[0].subresourceRange.levelCount = 1;
+            imageBarriers[0].subresourceRange.baseArrayLayer = 0;
+            imageBarriers[0].subresourceRange.layerCount = 1;
+            imageBarriers[0].srcAccessMask = OutResource->VkSharedImageAccess;
+            imageBarriers[0].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+            imageBarriers[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            imageBarriers[1].oldLayout = OutResource->VkSourceImageLayout;
+            imageBarriers[1].newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            imageBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imageBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            imageBarriers[1].image = InParam->Resource.ImageViewInfo.Image;
+            imageBarriers[1].subresourceRange = InParam->Resource.ImageViewInfo.SubresourceRange;
+            imageBarriers[1].srcAccessMask = OutResource->VkSourceImageAccess;
+            imageBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
             vkCmdPipelineBarrier(InCmdBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
+                                 0, 0, nullptr, 0, nullptr, 2, imageBarriers);
 
             // Create image views for depth transfer
             if (OutResource->VkSharedImageView == VK_NULL_HANDLE)
@@ -848,17 +861,23 @@ bool IFeature_VkwDx12::CopyTextureFromVkToDx12(VkCommandBuffer InCmdBuffer, NVSD
                 return false;
             }
 
-            imageBarrier.oldLayout = imageBarrier.newLayout;
-            imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageBarrier.srcAccessMask = imageBarrier.dstAccessMask;
-            imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            imageBarriers[0].oldLayout = imageBarriers[0].newLayout;
+            imageBarriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageBarriers[0].srcAccessMask = imageBarriers[0].dstAccessMask;
+            imageBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            imageBarriers[1].oldLayout = imageBarriers[1].newLayout;
+            imageBarriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageBarriers[1].srcAccessMask = imageBarriers[1].dstAccessMask;
+            imageBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
             vkCmdPipelineBarrier(InCmdBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                                 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
+                                 0, 0, nullptr, 0, nullptr, 2, imageBarriers);
 
-            OutResource->VkSharedImageLayout = imageBarrier.newLayout;
-            OutResource->VkSharedImageAccess = imageBarrier.dstAccessMask;
-
-            LOG_DEBUG("Depth converted to R32_SFLOAT");
+            OutResource->VkSharedImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            OutResource->VkSharedImageAccess = VK_ACCESS_SHADER_READ_BIT;
+            OutResource->VkSourceImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            OutResource->VkSourceImageAccess = VK_ACCESS_SHADER_READ_BIT;
         }
         else
         {
@@ -994,11 +1013,7 @@ bool IFeature_VkwDx12::CopyTextureFromVkToDx12(VkCommandBuffer InCmdBuffer, NVSD
                     OutResource->VkSharedImageAccess = imageBarriers[1].dstAccessMask;
                 }
             }
-
-            LOG_DEBUG("Resource copy completed");
         }
-
-        LOG_DEBUG("Vulkan texture copy recorded");
     }
 
     return true;
@@ -1012,6 +1027,55 @@ static bool NvVkResourceNotValid(NVSDK_NGX_Resource_VK* param)
            param->Resource.ImageViewInfo.Height == 0;
 }
 
+void IFeature_VkwDx12::RecreateCommandBuffersForQueueFamily(uint32_t queueFamily)
+{
+    LOG_DEBUG("Recreating command buffers for queue family {}", queueFamily);
+
+    // Update the queue family index
+    uint32_t oldFamily = VulkanQueueFamilyIndex;
+    VulkanQueueFamilyIndex = queueFamily;
+
+    // Destroy old command pools/buffers
+    for (uint32_t i = 0; i < 2; i++)
+    {
+        if (VulkanCopyCommandBuffer[i] != VK_NULL_HANDLE)
+        {
+            vkFreeCommandBuffers(VulkanDevice, VulkanCopyCommandPool[i], 1, &VulkanCopyCommandBuffer[i]);
+            VulkanCopyCommandBuffer[i] = VK_NULL_HANDLE;
+        }
+
+        if (VulkanCopyCommandPool[i] != VK_NULL_HANDLE)
+        {
+            vkDestroyCommandPool(VulkanDevice, VulkanCopyCommandPool[i], nullptr);
+            VulkanCopyCommandPool[i] = VK_NULL_HANDLE;
+        }
+
+        if (VulkanBarrierCommandBuffer[i] != VK_NULL_HANDLE)
+        {
+            vkFreeCommandBuffers(VulkanDevice, VulkanBarrierCommandPool[i], 1, &VulkanBarrierCommandBuffer[i]);
+            VulkanBarrierCommandBuffer[i] = VK_NULL_HANDLE;
+        }
+
+        if (VulkanBarrierCommandPool[i] != VK_NULL_HANDLE)
+        {
+            vkDestroyCommandPool(VulkanDevice, VulkanBarrierCommandPool[i], nullptr);
+            VulkanBarrierCommandPool[i] = VK_NULL_HANDLE;
+        }
+    }
+
+    // Recreate with new queue family (CreateVulkanCopyCommandBuffer uses VulkanQueueFamilyIndex)
+    if (!CreateVulkanCopyCommandBuffer())
+    {
+        LOG_ERROR("Failed to recreate command buffers for queue family {}", queueFamily);
+        VulkanQueueFamilyIndex = oldFamily; // Restore old value on failure
+        CreateVulkanCopyCommandBuffer();
+    }
+    else
+    {
+        LOG_DEBUG("Successfully recreated command buffers for queue family {}", queueFamily);
+    }
+}
+
 bool IFeature_VkwDx12::ProcessVulkanTextures(VkCommandBuffer InCmdList, const NVSDK_NGX_Parameter* InParameters)
 {
     LOG_FUNC();
@@ -1019,6 +1083,29 @@ bool IFeature_VkwDx12::ProcessVulkanTextures(VkCommandBuffer InCmdList, const NV
     auto frame = _frameCount % 2;
     Vulkan_wDx12::lastCmdBuffer = InCmdList;
     LOG_DEBUG("frame: {}", frame);
+
+    auto queueFamilyOpt = Vulkan_wDx12::cmdBufferStateTracker.GetCommandBufferQueueFamily(InCmdList);
+
+    if (queueFamilyOpt.has_value())
+    {
+        uint32_t cmdBufferQueueFamily = queueFamilyOpt.value();
+        LOG_DEBUG("Command buffer {:X} belongs to queue family {}", (size_t) InCmdList, cmdBufferQueueFamily);
+
+        // Check if it matches your command pools
+        if (cmdBufferQueueFamily != VulkanQueueFamilyIndex)
+        {
+            LOG_WARN("Queue family mismatch detected! App uses family {}, we use family {}", cmdBufferQueueFamily,
+                     VulkanQueueFamilyIndex);
+
+            // Recreate command pools for the correct queue family
+            RecreateCommandBuffersForQueueFamily(cmdBufferQueueFamily);
+        }
+    }
+    else
+    {
+        LOG_WARN("Could not determine queue family for command buffer {:X}, using default {}", (size_t) InCmdList,
+                 VulkanQueueFamilyIndex);
+    }
 
     LOG_DEBUG("Upscaling command buffer: {:X}, frame: {}", (size_t) InCmdList, frame);
 
@@ -2142,12 +2229,12 @@ bool IFeature_VkwDx12::BaseInit(VkInstance InInstance, VkPhysicalDevice InPD, Vk
     bool queueFamilyFound = false;
     for (uint32_t i = 0; i < queueFamilyCount; i++)
     {
+
         if (queueFamilies[i].queueFlags & VK_QUEUE_COMPUTE_BIT)
         {
             LOG_DEBUG("Found compute queue family index: {}", i);
             VulkanQueueFamilyIndex = i;
             queueFamilyFound = true;
-            break;
         }
     }
 
