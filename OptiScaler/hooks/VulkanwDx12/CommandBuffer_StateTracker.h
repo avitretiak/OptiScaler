@@ -15,6 +15,8 @@
 #include <optional>
 #include <algorithm>
 #include <bitset>
+#include <atomic>
+#include <shared_mutex>
 
 #define LOW_PRECISION_TRACKING
 
@@ -234,29 +236,49 @@ class CommandBufferStateTracker
     CommandBufferStateTracker() { _state = &State::Instance(); }
 
     // Call this when command buffers are allocated from a pool
-    void OnAllocateCommandBuffers(VkCommandPool pool, uint32_t count, const VkCommandBuffer* pCommandBuffers)
+    void OnAllocateCommandBuffers(VkCommandPool pool, uint32_t count, const VkCommandBuffer* pCommandBuffers,
+                                  uint32_t queueFamilyIndex)
     {
-        if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
-            return;
-
-        std::scoped_lock lock(_mtx);
-
-        // Initialize pool epoch ONLY if this is a truly new pool (not seen before)
-        // Don't overwrite existing epochs - OnResetPool may have already incremented it
-        if (_poolEpochs.find(pool) == _poolEpochs.end())
+        // Fast path: check if pool metadata already exists (read-only lock)
         {
-            _poolEpochs[pool] = _globalEpochCounter;
-            // LOG_DEBUG("Pool {:X} initialized with epoch {}", (size_t) pool, _globalEpochCounter);
+            std::shared_lock poolLock(_poolMetadataMutex);
+            if (_poolToQueueFamily.find(pool) != _poolToQueueFamily.end())
+            {
+                // Pool already initialized - only need to map command buffers
+                std::unique_lock lock(_mtx);
+                for (uint32_t i = 0; i < count; ++i)
+                {
+                    _cmdBufferToPool[pCommandBuffers[i]] = pool;
+                }
+                return;
+            }
         }
 
-        // Map each command buffer to its pool
-        for (uint32_t i = 0; i < count; ++i)
+        // Slow path: initialize new pool (exclusive lock only for this rare case)
         {
-            _cmdBufferToPool[pCommandBuffers[i]] = pool;
-        }
+            std::unique_lock poolLock(_poolMetadataMutex);
 
-        // LOG_DEBUG("Allocated {} command buffers from pool {:X} (current pool epoch: {})", count, (size_t) pool,
-        //           _poolEpochs[pool]);
+            // Double-check after acquiring exclusive lock
+            if (_poolToQueueFamily.find(pool) == _poolToQueueFamily.end())
+            {
+                _poolToQueueFamily[pool] = queueFamilyIndex;
+
+                // Initialize epoch atomically using shared_ptr
+                auto epochIt = _poolEpochs.find(pool);
+                if (epochIt == _poolEpochs.end())
+                {
+                    _poolEpochs[pool] =
+                        std::make_shared<std::atomic<uint64_t>>(_globalEpochCounter.load(std::memory_order_acquire));
+                }
+            }
+
+            // Map command buffers
+            std::unique_lock lock(_mtx);
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                _cmdBufferToPool[pCommandBuffers[i]] = pool;
+            }
+        }
     }
 
     void OnBegin(VkCommandBuffer cmd, const VkCommandBufferBeginInfo* pBeginInfo)
@@ -267,45 +289,45 @@ class CommandBufferStateTracker
         const uint32_t flags = (pBeginInfo) ? pBeginInfo->flags : 0;
         std::scoped_lock lock(_mtx);
 
-        // Check if this command buffer is tracked in a pool
         auto poolIt = _cmdBufferToPool.find(cmd);
         if (poolIt == _cmdBufferToPool.end())
         {
-            // Command buffer not mapped to any pool - allocation hook may have been missed
-            // We'll allow recording but log a warning since this affects epoch validation accuracy
-            LOG_WARN("Command buffer {:p} not tracked in any pool (allocation hook missed?). "
-                     "Recording will proceed but epoch validation will be disabled for safety.",
-                     (void*) cmd);
-
-            // Create/reset state but mark with epoch 0 to signal "untrusted" status
             auto& statePtr = _states[cmd];
             if (!statePtr)
                 statePtr = std::make_shared<CommandBufferState>();
-
-            statePtr->ResetForNewRecording(flags, 0); // epoch 0 = untrusted/unvalidated
+            statePtr->ResetForNewRecording(flags, 0);
             return;
         }
 
-        // Get the current epoch for this command buffer's pool
         VkCommandPool pool = poolIt->second;
+
+        // Lock-free atomic read
+        std::shared_lock poolLock(_poolMetadataMutex);
         auto epochIt = _poolEpochs.find(pool);
 
         uint64_t currentEpoch;
         if (epochIt == _poolEpochs.end())
         {
-            // Pool not in epoch map - should have been initialized during allocation
-            // Initialize it now with current global epoch
-            currentEpoch = _globalEpochCounter;
-            _poolEpochs[pool] = currentEpoch;
-            LOG_WARN("Pool {:X} had no epoch - initializing to {} during vkBeginCommandBuffer", (size_t) pool,
-                     currentEpoch);
+            poolLock.unlock();
+            std::unique_lock exclusiveLock(_poolMetadataMutex);
+
+            // Double-check after exclusive lock
+            epochIt = _poolEpochs.find(pool);
+            if (epochIt == _poolEpochs.end())
+            {
+                currentEpoch = _globalEpochCounter.load(std::memory_order_acquire);
+                _poolEpochs[pool] = std::make_shared<std::atomic<uint64_t>>(currentEpoch);
+            }
+            else
+            {
+                currentEpoch = epochIt->second->load(std::memory_order_acquire);
+            }
         }
         else
         {
-            currentEpoch = epochIt->second;
+            currentEpoch = epochIt->second->load(std::memory_order_acquire);
         }
 
-        // Create new state or reset existing
         auto& statePtr = _states[cmd];
         if (!statePtr)
             statePtr = std::make_shared<CommandBufferState>();
@@ -340,15 +362,34 @@ class CommandBufferStateTracker
         if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
             return;
 
-        // Invalidate only command buffers from this specific pool by incrementing its epoch
-        std::scoped_lock lock(_mtx);
+        // Atomic increment - lock-free for the epoch counter
+        uint64_t newEpoch = _globalEpochCounter.fetch_add(1, std::memory_order_acq_rel) + 1;
 
-        _globalEpochCounter++;
-        _poolEpochs[pool] = _globalEpochCounter;
+        // Need lock only to access/modify the map itself
+        std::unique_lock poolLock(_poolMetadataMutex);
 
-        // LOG_DEBUG("Pool {:X} reset - pool epoch set to {} - command buffers from THIS POOL invalidated until next "
-        //           "vkBeginCommandBuffer",
-        //           (size_t) pool, _globalEpochCounter);
+        auto epochIt = _poolEpochs.find(pool);
+        if (epochIt != _poolEpochs.end())
+        {
+            epochIt->second->store(newEpoch, std::memory_order_release);
+        }
+        else
+        {
+            _poolEpochs[pool] = std::make_shared<std::atomic<uint64_t>>(newEpoch);
+        }
+
+        // if (_state->currentFeature == nullptr || !_state->currentFeature->IsWithDx12())
+        //     return;
+
+        //// Invalidate only command buffers from this specific pool by incrementing its epoch
+        // std::scoped_lock lock(_mtx);
+
+        //_globalEpochCounter++;
+        //_poolEpochs[pool] = _globalEpochCounter;
+
+        //// LOG_DEBUG("Pool {:X} reset - pool epoch set to {} - command buffers from THIS POOL invalidated until next "
+        ////           "vkBeginCommandBuffer",
+        ////           (size_t) pool, _globalEpochCounter);
     }
 
     void OnBindPipeline(VkCommandBuffer cmd, VkPipelineBindPoint bindPoint, VkPipeline pipeline)
@@ -950,6 +991,27 @@ class CommandBufferStateTracker
         _hasCachedFns = true;
     }
 
+    std::optional<uint32_t> GetCommandBufferQueueFamily(VkCommandBuffer cmd) const
+    {
+        std::scoped_lock lock(_mtx);
+
+        auto poolIt = _cmdBufferToPool.find(cmd);
+        if (poolIt == _cmdBufferToPool.end())
+        {
+            LOG_WARN("Command buffer {:X} not tracked in any pool", (size_t) cmd);
+            return std::nullopt;
+        }
+
+        auto familyIt = _poolToQueueFamily.find(poolIt->second);
+        if (familyIt == _poolToQueueFamily.end())
+        {
+            LOG_WARN("Pool {:X} has no queue family info", (size_t) poolIt->second);
+            return std::nullopt;
+        }
+
+        return familyIt->second;
+    }
+
   private:
     inline static State* _state;
 
@@ -1278,42 +1340,34 @@ class CommandBufferStateTracker
         if (it == _states.end() || !it->second)
             return false;
 
-        // Check if this command buffer is tracked in a pool
         auto poolIt = _cmdBufferToPool.find(cmd);
         if (poolIt == _cmdBufferToPool.end())
         {
-            // Command buffer not mapped to any pool - allocation hook may have been missed
-            // This is potentially unsafe as we can't validate against pool-specific epochs
-            LOG_WARN("Command buffer {:p} not tracked in any pool (allocation hook missed?). "
-                     "Cannot validate epoch - refusing replay for safety.",
-                     (void*) cmd);
+            LOG_WARN("Command buffer {:p} not tracked in any pool", (void*) cmd);
             return false;
         }
 
-        // Get the current epoch for this command buffer's pool
         VkCommandPool pool = poolIt->second;
+
+        // Lock-free atomic read
+        std::shared_lock poolLock(_poolMetadataMutex);
         auto epochIt = _poolEpochs.find(pool);
         if (epochIt == _poolEpochs.end())
         {
-            // Pool exists in mapping but has no epoch - should not happen if properly initialized
-            LOG_ERROR("Pool {:X} for command buffer {:p} has no epoch entry. Internal state corruption?", (size_t) pool,
-                      (void*) cmd);
+            LOG_ERROR("Pool {:X} has no epoch entry", (size_t) pool);
             return false;
         }
 
-        uint64_t currentPoolEpoch = epochIt->second;
+        uint64_t currentPoolEpoch = epochIt->second->load(std::memory_order_acquire);
+        poolLock.unlock();
 
-        // Check if this command buffer's state is stale (invalidated by its pool's reset)
         if (it->second->BeginEpoch < currentPoolEpoch)
         {
-            LOG_WARN("Command buffer {:p} has stale state (epoch {} < pool {:X} epoch {}), refusing replay. "
-                     "This command buffer was invalidated by vkResetCommandPool and must not be used until "
-                     "vkBeginCommandBuffer is called.",
-                     (void*) cmd, it->second->BeginEpoch, (size_t) pool, currentPoolEpoch);
+            LOG_WARN("Command buffer {:p} has stale state (epoch {} < pool {:X} epoch {})", (void*) cmd,
+                     it->second->BeginEpoch, (size_t) pool, currentPoolEpoch);
             return false;
         }
 
-        // Deep copy the state under lock - this is now a true immutable snapshot
         out = *it->second;
         return true;
     }
@@ -1347,26 +1401,26 @@ class CommandBufferStateTracker
             auto poolIt = _cmdBufferToPool.find(srcCmd);
             if (poolIt == _cmdBufferToPool.end())
             {
-                // Command buffer not mapped to any pool - allocation hook may have been missed
-                // This is potentially unsafe as we can't validate against pool-specific epochs
                 LOG_WARN("Command buffer {:p} not tracked in any pool (allocation hook missed?). "
                          "Cannot validate epoch - refusing replay for safety.",
                          (void*) srcCmd);
                 return false;
             }
 
-            // Get the current epoch for this command buffer's pool
+            // Get the current epoch for this command buffer's pool - LOCK-FREE ATOMIC READ
             VkCommandPool pool = poolIt->second;
+
+            std::shared_lock poolLock(_poolMetadataMutex);
             auto epochIt = _poolEpochs.find(pool);
             if (epochIt == _poolEpochs.end())
             {
-                // Pool exists in mapping but has no epoch - should not happen if properly initialized
                 LOG_ERROR("Pool {:X} for command buffer {:p} has no epoch entry. Internal state corruption?",
                           (size_t) pool, (void*) srcCmd);
                 return false;
             }
 
-            uint64_t currentPoolEpoch = epochIt->second;
+            uint64_t currentPoolEpoch = epochIt->second->load(std::memory_order_acquire);
+            poolLock.unlock();
 
             // Check if this command buffer's state is stale (invalidated by pool reset)
             if (it->second->BeginEpoch < currentPoolEpoch)
@@ -1542,16 +1596,9 @@ class CommandBufferStateTracker
         return true;
     }
 
-    CommandBufferState* GetState(VkCommandBuffer cmd)
-    {
-        std::scoped_lock lock(_mtx);
-        auto& statePtr = _states[cmd];
-        if (!statePtr)
-            statePtr = std::make_shared<CommandBufferState>();
-        return statePtr.get(); // Return raw pointer
-    }
+    mutable std::shared_mutex _mtx;
+    mutable std::shared_mutex _poolMetadataMutex; // Separate lock for pool metadata
 
-    mutable std::mutex _mtx;
     std::unordered_map<VkCommandBuffer, std::shared_ptr<CommandBufferState>> _states;
 
     VulkanCmdFns _cachedFns {};
@@ -1559,7 +1606,8 @@ class CommandBufferStateTracker
 
     // Per-pool epoch tracking for accurate invalidation
     std::unordered_map<VkCommandBuffer, VkCommandPool> _cmdBufferToPool;
-    std::unordered_map<VkCommandPool, uint64_t> _poolEpochs;
-    uint64_t _globalEpochCounter = 1;
+    std::unordered_map<VkCommandPool, uint32_t> _poolToQueueFamily;
+    std::unordered_map<VkCommandPool, std::shared_ptr<std::atomic<uint64_t>>> _poolEpochs;
+    std::atomic<uint64_t> _globalEpochCounter { 1 };
 };
 } // namespace vk_state
