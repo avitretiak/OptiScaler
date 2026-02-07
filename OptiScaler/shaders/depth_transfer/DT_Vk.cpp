@@ -133,10 +133,10 @@ DepthTransfer_Vk::~DepthTransfer_Vk()
 
 void DepthTransfer_Vk::CreateDescriptorSetLayout()
 {
-    // Binding 0: Source (Sampled Image)
+    // Binding 0: Source (Storage Image - for direct read without sampling)
     VkDescriptorSetLayoutBinding sourceLayoutBinding {};
     sourceLayoutBinding.binding = 0;
-    sourceLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    sourceLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     sourceLayoutBinding.descriptorCount = 1;
     sourceLayoutBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
@@ -209,7 +209,7 @@ void DepthTransfer_Vk::UpdateDescriptorSet(VkCommandBuffer cmdList, int setIndex
 {
     VkDescriptorSet descriptorSet = _descriptorSets[setIndex];
 
-    // 0: Source
+    // 0: Source (Storage Image)
     VkDescriptorImageInfo sourceInfo {};
     sourceInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     sourceInfo.imageView = inputView;
@@ -220,11 +220,11 @@ void DepthTransfer_Vk::UpdateDescriptorSet(VkCommandBuffer cmdList, int setIndex
     descriptorWriteSource.dstSet = descriptorSet;
     descriptorWriteSource.dstBinding = 0;
     descriptorWriteSource.dstArrayElement = 0;
-    descriptorWriteSource.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    descriptorWriteSource.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     descriptorWriteSource.descriptorCount = 1;
     descriptorWriteSource.pImageInfo = &sourceInfo;
 
-    // 1: Dest
+    // 1: Dest (Storage Image)
     VkDescriptorImageInfo destInfo {};
     destInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     destInfo.imageView = outputView;
