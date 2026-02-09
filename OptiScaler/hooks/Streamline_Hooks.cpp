@@ -541,9 +541,7 @@ bool StreamlineHooks::hkdlssg_slOnPluginLoad(void* params, const char* loaderJSO
         if (configJson.contains("vsync"))
             configJson["vsync"]["supported"] = true; // disable eVSyncOffRequired
 
-        if (configJson.contains("hws"))
-            configJson["hws"]["required"] = false; // disable eHardwareSchedulingRequired
-
+        configJson["external"]["hws"]["required"] = false; // disable eHardwareSchedulingRequired
         configJson["external"]["feature"]["tags"].clear(); // We handle the DLSSG resources
     }
 
@@ -665,15 +663,20 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
 
     if (fg != nullptr)
     {
-        state.estimatedVRAMUsageInBytes = 256 * 1024 * 1024;
+        if (options != nullptr && options->flags & sl::DLSSGFlags::eRequestVRAMEstimate)
+            state.estimatedVRAMUsageInBytes = static_cast<uint64_t>(256 * 1024) * 1024;
 
         if (fg->IsActive() && !fg->IsPaused())
             state.numFramesActuallyPresented = 2;
         else
             state.numFramesActuallyPresented = 1;
+    }
+    else
+    {
+            state.numFramesActuallyPresented = 1;
+    }
 
         state.numFramesToGenerateMax = 1;
-    }
 
     LOG_DEBUG("Status: {}, numFramesActuallyPresented: {}", magic_enum::enum_name(state.status),
               state.numFramesActuallyPresented);
