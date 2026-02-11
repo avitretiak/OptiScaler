@@ -1,4 +1,5 @@
-#include "pch.h"
+#include <pch.h>
+
 #include "Streamline_Hooks.h"
 
 #include <json.hpp>
@@ -473,20 +474,29 @@ bool StreamlineHooks::hkdlss_slOnPluginLoad(void* params, const char* loaderJSON
     if (Config::Instance()->StreamlineSpoofing.value_or_default())
         setArch(currentArch);
 
-    if (Config::Instance()->VulkanExtensionSpoofing.value_or_default())
+    nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
+
+    if (!State::Instance().isRunningOnNvidia || State::Instance().isPascalOrOlder)
     {
-        nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
+        if (Config::Instance()->VulkanExtensionSpoofing.value_or_default())
+        {
+            if (configJson.contains("/external/vk/instance/extensions"_json_pointer))
+                configJson["external"]["vk"]["instance"]["extensions"].clear();
 
-        if (configJson.contains("/external/vk/instance/extensions"_json_pointer))
-            configJson["external"]["vk"]["instance"]["extensions"].clear();
+            if (configJson.contains("/external/vk/device/extensions"_json_pointer))
+                configJson["external"]["vk"]["device"]["extensions"].clear();
 
-        if (configJson.contains("/external/vk/device/extensions"_json_pointer))
-            configJson["external"]["vk"]["device"]["extensions"].clear();
+            if (configJson.contains("/external/vk/device/1.2_features"_json_pointer))
+                configJson["external"]["vk"]["device"]["1.2_features"].clear();
 
-        config = configJson.dump();
-
-        *pluginJSON = config.c_str();
+            if (configJson.contains("/external/vk/device/1.3_features"_json_pointer))
+                configJson["external"]["vk"]["device"]["1.3_features"].clear();
+        }
     }
+
+    config = configJson.dump();
+
+    *pluginJSON = config.c_str();
 
     return result;
 }
@@ -517,29 +527,35 @@ bool StreamlineHooks::hkdlssg_slOnPluginLoad(void* params, const char* loaderJSO
 
     nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
 
-    if (Config::Instance()->StreamlineSpoofing.value_or_default())
+    // Kill the DLSSG streamline swapchain hooks
+    if (State::Instance().activeFgInput == FGInput::DLSSG)
     {
-        // Kill the DLSSG streamline swapchain hooks
-        if (State::Instance().activeFgInput == FGInput::DLSSG)
-        {
-            if (configJson.contains("hooks"))
-                configJson["hooks"].clear();
+        if (configJson.contains("/hooks"_json_pointer))
+            configJson["hooks"].clear();
 
-            if (configJson.contains("exclusive_hooks"))
-                configJson["exclusive_hooks"].clear();
+        if (configJson.contains("/exclusive_hooks"_json_pointer))
+            configJson["exclusive_hooks"].clear();
 
-            if (configJson.contains("vsync"))
-                configJson["vsync"]["supported"] = true; // disable eVSyncOffRequired
+        if (configJson.contains("/external/feature/tags"_json_pointer))
+            configJson["external"]["feature"]["tags"].clear(); // We handle the DLSSG resources
+    }
 
-            if (configJson.contains("/external/feature/tags"_json_pointer))
-                configJson["external"]["feature"]["tags"].clear(); // We handle the DLSSG resources
-        }
+    if (State::Instance().activeFgInput == FGInput::DLSSG || State::Instance().activeFgInput == FGInput::Nukems)
+    {
+        if (configJson.contains("/vsync/supported"_json_pointer))
+            configJson["vsync"]["supported"] = true; // disable eVSyncOffRequired
 
-        if (State::Instance().activeFgInput == FGInput::DLSSG || State::Instance().activeFgInput == FGInput::Nukems)
-        {
-            if (configJson.contains("/external/hws/required"_json_pointer))
-                configJson["external"]["hws"]["required"] = false; // disable eHardwareSchedulingRequired
-        }
+        if (configJson.contains("/external/hws/required"_json_pointer))
+            configJson["external"]["hws"]["required"] = false; // disable eHardwareSchedulingRequired
+
+        if (configJson.contains("/external/vk/opticalflow/supported"_json_pointer))
+            configJson["external"]["vk"]["opticalflow"]["supported"] = true;
+
+        if (configJson.contains("/external/vk/device/queues/compute/count"_json_pointer))
+            configJson["external"]["vk"]["device"]["queues"]["compute"]["count"] = 0;
+
+        if (configJson.contains("/external/vk/device/queues/graphics/count"_json_pointer))
+            configJson["external"]["vk"]["device"]["queues"]["graphics"]["count"] = 0;
     }
 
     if (Config::Instance()->VulkanExtensionSpoofing.value_or_default())
@@ -550,8 +566,11 @@ bool StreamlineHooks::hkdlssg_slOnPluginLoad(void* params, const char* loaderJSO
         if (configJson.contains("/external/vk/device/extensions"_json_pointer))
             configJson["external"]["vk"]["device"]["extensions"].clear();
 
-        if (configJson.contains("/external/vk/opticalflow/supported"_json_pointer))
-            configJson["external"]["vk"]["opticalflow"]["supported"] = true;
+        if (configJson.contains("/external/vk/device/1.2_features"_json_pointer))
+            configJson["external"]["vk"]["device"]["1.2_features"].clear();
+
+        if (configJson.contains("/external/vk/device/1.3_features"_json_pointer))
+            configJson["external"]["vk"]["device"]["1.3_features"].clear();
     }
 
     config = configJson.dump();
@@ -580,18 +599,6 @@ bool StreamlineHooks::hkcommon_slOnPluginLoad(void* params, const char* loaderJS
     static std::string config;
 
     auto result = o_common_slOnPluginLoad(params, loaderJSON, pluginJSON);
-
-    if (Config::Instance()->StreamlineSpoofing.value_or_default() && State::Instance().activeFgInput == FGInput::DLSSG)
-    {
-        nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
-
-        if (configJson.contains("hooks"))
-            configJson["hooks"].clear();
-
-        config = configJson.dump();
-
-        *pluginJSON = config.c_str();
-    }
 
     // Completely disables Streamline hooks
     // if (true)
@@ -628,22 +635,6 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
             ReflexHooks::setDlssgDetectedState(false);
         }
     }
-    // else
-    //{
-    //     if (State::Instance().currentFGSwapchain != nullptr && Config::Instance()->FGEnabled.value_or_default())
-    //     {
-    //         if (newOptions.mode == sl::DLSSGMode::eOn)
-    //         {
-    //             if (!State::Instance().currentFG->IsActive())
-    //                 State::Instance().currentFG->Activate();
-    //         }
-    //         else
-    //         {
-    //             if (State::Instance().currentFG->IsActive())
-    //                 State::Instance().currentFG->Deactivate();
-    //         }
-    //     }
-    // }
 
     LOG_TRACE("DLSSG Modified Mode: {}", magic_enum::enum_name(newOptions.mode));
 
@@ -656,27 +647,31 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     auto result = o_slDLSSGGetState(viewport, state, options);
 
     auto& s = State::Instance();
-    auto fg = s.currentFG;
 
-    if (fg != nullptr)
+    if (s.activeFgInput == FGInput::DLSSG)
     {
-        if (options != nullptr && options->flags & sl::DLSSGFlags::eRequestVRAMEstimate)
-            state.estimatedVRAMUsageInBytes = static_cast<uint64_t>(256 * 1024) * 1024;
+        auto fg = s.currentFG;
 
-        if (fg->IsActive() && !fg->IsPaused())
-            state.numFramesActuallyPresented = 2;
+        if (fg != nullptr)
+        {
+            if (options != nullptr && options->flags & sl::DLSSGFlags::eRequestVRAMEstimate)
+                state.estimatedVRAMUsageInBytes = static_cast<uint64_t>(256 * 1024) * 1024;
+
+            if (fg->IsActive() && !fg->IsPaused())
+                state.numFramesActuallyPresented = 2;
+            else
+                state.numFramesActuallyPresented = 1;
+        }
         else
+        {
             state.numFramesActuallyPresented = 1;
-    }
-    else
-    {
-        state.numFramesActuallyPresented = 1;
-    }
+        }
 
-    state.numFramesToGenerateMax = 1;
+        state.numFramesToGenerateMax = 1;
 
-    LOG_DEBUG("Status: {}, numFramesActuallyPresented: {}", magic_enum::enum_name(state.status),
-              state.numFramesActuallyPresented);
+        LOG_DEBUG("Status: {}, numFramesActuallyPresented: {}", magic_enum::enum_name(state.status),
+                  state.numFramesActuallyPresented);
+    }
 
     return result;
 }
@@ -703,10 +698,19 @@ bool StreamlineHooks::hkreflex_slOnPluginLoad(void* params, const char* loaderJS
 
     nlohmann::json configJson = nlohmann::json::parse(*pluginJSON);
 
-    if (Config::Instance()->VulkanExtensionSpoofing.value_or_default())
+    if (!State::Instance().isRunningOnNvidia && Config::Instance()->VulkanExtensionSpoofing.value_or_default())
     {
+        if (configJson.contains("/external/vk/instance/extensions"_json_pointer))
+            configJson["external"]["vk"]["instance"]["extensions"].clear();
+
         if (configJson.contains("/external/vk/device/extensions"_json_pointer))
             configJson["external"]["vk"]["device"]["extensions"].clear();
+
+        if (configJson.contains("/external/vk/device/1.2_features"_json_pointer))
+            configJson["external"]["vk"]["device"]["1.2_features"].clear();
+
+        if (configJson.contains("/external/vk/device/1.3_features"_json_pointer))
+            configJson["external"]["vk"]["device"]["1.3_features"].clear();
     }
 
     config = configJson.dump();
@@ -1244,11 +1248,12 @@ void StreamlineHooks::unhookReflex()
     DetourUpdateThread(GetCurrentThread());
 
     if (o_reflex_slGetPluginFunction)
+    {
         DetourDetach(&(PVOID&) o_reflex_slGetPluginFunction, hkreflex_slGetPluginFunction);
+        o_reflex_slGetPluginFunction = nullptr;
+    }
 
     DetourTransactionCommit();
-
-    o_reflex_slGetPluginFunction = nullptr;
 }
 
 void StreamlineHooks::hookReflex(HMODULE slReflex)
