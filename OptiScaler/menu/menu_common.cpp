@@ -1933,8 +1933,8 @@ bool MenuCommon::RenderMenu()
                 {
                     firstLine = StrFmt("%s | FPS: %6.1f, %7.2f ms %s | %s -> %s %u.%u.%u", api.c_str(), frameRate,
                                        frameTime, fgText.c_str(), state.currentInputApiName.c_str(),
-                                       currentFeature->Name().c_str(), state.currentFeature->Version().major,
-                                       state.currentFeature->Version().minor, state.currentFeature->Version().patch);
+                                       currentFeature->Name().c_str(), currentFeature->Version().major,
+                                       currentFeature->Version().minor, currentFeature->Version().patch);
                 }
                 else
                 {
@@ -1948,8 +1948,8 @@ bool MenuCommon::RenderMenu()
                 {
                     firstLine = StrFmt("%s | FPS: %6.1f, Avg: %6.1f %s | %s -> %s %u.%u.%u", api.c_str(), frameRate,
                                        1000.0f / averageFrameTime, fgText.c_str(), state.currentInputApiName.c_str(),
-                                       currentFeature->Name().c_str(), state.currentFeature->Version().major,
-                                       state.currentFeature->Version().minor, state.currentFeature->Version().patch);
+                                       currentFeature->Name().c_str(), currentFeature->Version().major,
+                                       currentFeature->Version().minor, currentFeature->Version().patch);
                 }
                 else
                 {
@@ -2384,8 +2384,8 @@ bool MenuCommon::RenderMenu()
                             ImGui::Text(state.DeviceAdapterNames[state.currentD3D12Device].c_str());
 
                         ImGui::Text("D3D11 %s| %s %d.%d.%d", state.isRunningOnDXVK ? "(DXVK) " : "",
-                                    state.currentFeature->Name().c_str(), state.currentFeature->Version().major,
-                                    state.currentFeature->Version().minor, state.currentFeature->Version().patch);
+                                    currentFeature->Name().c_str(), currentFeature->Version().major,
+                                    currentFeature->Version().minor, currentFeature->Version().patch);
                         ImGui::SameLine(0.0f, 6.0f);
                         ImGui::Text("| Input: %s", state.currentInputApiName.c_str());
 
@@ -2393,7 +2393,7 @@ bool MenuCommon::RenderMenu()
                         spoofingText = config->DxgiSpoofing.value_or_default() ? "On" : "Off";
                         ImGui::Text("| Spoof: %s", spoofingText.c_str());
 
-                        if (state.currentFeature->Name() != "DLSSD")
+                        if (currentFeature->Name() != "DLSSD")
                             AddDx11Backends(&currentBackend, &currentBackendName);
 
                         break;
@@ -2403,8 +2403,8 @@ bool MenuCommon::RenderMenu()
                             ImGui::Text(state.DeviceAdapterNames[state.currentD3D12Device].c_str());
 
                         ImGui::Text("D3D12 %s| %s %d.%d.%d", state.isRunningOnDXVK ? "(DXVK) " : "",
-                                    state.currentFeature->Name().c_str(), state.currentFeature->Version().major,
-                                    state.currentFeature->Version().minor, state.currentFeature->Version().patch);
+                                    currentFeature->Name().c_str(), currentFeature->Version().major,
+                                    currentFeature->Version().minor, currentFeature->Version().patch);
                         ImGui::SameLine(0.0f, 6.0f);
                         ImGui::Text("| Input: %s", state.currentInputApiName.c_str());
 
@@ -2412,7 +2412,7 @@ bool MenuCommon::RenderMenu()
                         spoofingText = config->DxgiSpoofing.value_or_default() ? "On" : "Off";
                         ImGui::Text("| Spoof: %s", spoofingText.c_str());
 
-                        if (state.currentFeature->Name() != "DLSSD")
+                        if (currentFeature->Name() != "DLSSD")
                             AddDx12Backends(&currentBackend, &currentBackendName);
 
                         break;
@@ -2422,8 +2422,8 @@ bool MenuCommon::RenderMenu()
                             ImGui::Text(state.DeviceAdapterNames[state.currentVkDevice].c_str());
 
                         ImGui::Text("Vulkan %s| %s %d.%d.%d", state.isRunningOnDXVK ? "(DXVK) " : "",
-                                    state.currentFeature->Name().c_str(), state.currentFeature->Version().major,
-                                    state.currentFeature->Version().minor, state.currentFeature->Version().patch);
+                                    currentFeature->Name().c_str(), currentFeature->Version().major,
+                                    currentFeature->Version().minor, currentFeature->Version().patch);
                         ImGui::SameLine(0.0f, 6.0f);
                         ImGui::Text("| Input: %s", state.currentInputApiName.c_str());
 
@@ -2442,13 +2442,13 @@ bool MenuCommon::RenderMenu()
                         ImGui::SameLine(0.0f, 6.0f);
                         ImGui::Text("| Spoof: %s", spoofingText.c_str());
 
-                        if (state.currentFeature->Name() != "DLSSD")
+                        if (currentFeature->Name() != "DLSSD")
                             AddVulkanBackends(&currentBackend, &currentBackendName);
                     }
 
                     ImGui::PopItemWidth();
 
-                    if (state.currentFeature->Name() != "DLSSD")
+                    if (currentFeature->Name() != "DLSSD")
                     {
                         ImGui::SameLine(0.0f, 6.0f);
 
@@ -2466,7 +2466,7 @@ bool MenuCommon::RenderMenu()
                         }
                     }
 
-                    if (state.currentFeature->AccessToReactiveMask())
+                    if (currentFeature->AccessToReactiveMask())
                     {
                         ImGui::BeginDisabled(config->DisableReactiveMask.value_or(false));
 
@@ -2506,7 +2506,7 @@ bool MenuCommon::RenderMenu()
                         }
                     }
 
-                    if (state.api == Vulkan && state.currentFeature->IsWithDx12())
+                    if (state.api == Vulkan && currentFeature->IsWithDx12())
                     {
                         ImGui::Spacing();
                         if (auto ch = ScopedCollapsingHeader("Vulkan with Dx12 Settings"); ch.IsHeaderOpen())
@@ -2530,7 +2530,7 @@ bool MenuCommon::RenderMenu()
                     // UPSCALER SPECIFIC -----------------------------
 
                     // XeSS -----------------------------
-                    if (currentBackend == "xess" && state.currentFeature->Name() != "DLSSD")
+                    if (currentBackend == "xess" && currentFeature->Name() != "DLSSD")
                     {
                         ImGui::Spacing();
                         if (auto ch = ScopedCollapsingHeader("XeSS Settings"); ch.IsHeaderOpen())
@@ -2587,7 +2587,7 @@ bool MenuCommon::RenderMenu()
                     }
 
                     // FFX -----------------
-                    if (currentBackend.rfind("fsr", 0) == 0 && state.currentFeature->Name() != "DLSSD" &&
+                    if (currentBackend.rfind("fsr", 0) == 0 && currentFeature->Name() != "DLSSD" &&
                         (currentBackend == "fsr31" || currentBackend == "fsr31_12"))
                     {
                         ImGui::SeparatorText("FFX Settings");
@@ -2906,10 +2906,10 @@ bool MenuCommon::RenderMenu()
 
                     // DLSS -----------------
                     if ((config->DLSSEnabled.value_or_default() && currentBackend == "dlss" &&
-                         state.currentFeature->Version().major > 2) ||
-                        state.currentFeature->Name() == "DLSSD")
+                         currentFeature->Version().major > 2) ||
+                        currentFeature->Name() == "DLSSD")
                     {
-                        const bool usesDlssd = state.currentFeature->Name() == "DLSSD";
+                        const bool usesDlssd = currentFeature->Name() == "DLSSD";
 
                         if (usesDlssd)
                             ImGui::SeparatorText("DLSSD Settings");
@@ -4517,7 +4517,7 @@ bool MenuCommon::RenderMenu()
                     {
                         config->OverrideSharpness = overrideSharpness;
 
-                        if (currentBackend == "dlss" && state.currentFeature->Version().major < 3)
+                        if (currentBackend == "dlss" && currentFeature->Version().major < 3)
                         {
                             state.newBackend = currentBackend;
                             MARK_ALL_BACKENDS_CHANGED();
@@ -4543,9 +4543,8 @@ bool MenuCommon::RenderMenu()
                     {
                         // xess or dlss version >= 2.5.1
                         constexpr feature_version requiredDlssVersion = { 2, 5, 1 };
-                        rcasEnabled =
-                            (currentBackend == "xess" ||
-                             (currentBackend == "dlss" && state.currentFeature->Version() >= requiredDlssVersion));
+                        rcasEnabled = (currentBackend == "xess" ||
+                                       (currentBackend == "dlss" && currentFeature->Version() >= requiredDlssVersion));
 
                         if (bool rcas = config->RcasEnabled.value_or(rcasEnabled);
                             ImGui::Checkbox("Enable RCAS", &rcas))
@@ -4709,8 +4708,7 @@ bool MenuCommon::RenderMenu()
                             }
 
                             ImGui::BeginDisabled((currentBackend == "xess" || currentBackend == "dlss") &&
-                                                 state.currentFeature->RenderWidth() >
-                                                     state.currentFeature->DisplayWidth());
+                                                 currentFeature->RenderWidth() > currentFeature->DisplayWidth());
                             ImGui::Checkbox("Enable", &_ssEnabled);
                             ImGui::EndDisabled();
 
@@ -4758,7 +4756,7 @@ bool MenuCommon::RenderMenu()
                                 config->OutputScalingUseFsr = _ssUseFsr;
                                 _ssDownsampler = config->OutputScalingDownscaler.value_or_default();
 
-                                if (state.currentFeature->Name() == "DLSSD")
+                                if (currentFeature->Name() == "DLSSD")
                                     state.newBackend = "dlssd";
                                 else
                                     state.newBackend = currentBackend;
@@ -4767,8 +4765,8 @@ bool MenuCommon::RenderMenu()
                             }
                             ImGui::EndDisabled();
 
-                            ImGui::BeginDisabled(!_ssEnabled || state.currentFeature->RenderWidth() >
-                                                                    state.currentFeature->DisplayWidth());
+                            ImGui::BeginDisabled(!_ssEnabled ||
+                                                 currentFeature->RenderWidth() > currentFeature->DisplayWidth());
                             ImGui::SliderFloat("Ratio", &_ssRatio, 0.5f, 3.0f, "%.2f");
                             ImGui::EndDisabled();
 
@@ -4811,7 +4809,7 @@ bool MenuCommon::RenderMenu()
                         ImGui::EndDisabled();
 
                         ImGui::TableNextColumn();
-                        auto accessToReactiveMask = state.currentFeature->AccessToReactiveMask();
+                        auto accessToReactiveMask = currentFeature->AccessToReactiveMask();
                         ImGui::BeginDisabled(!accessToReactiveMask);
 
                         bool canUseReactiveMask =
@@ -4903,7 +4901,7 @@ bool MenuCommon::RenderMenu()
                                 ImGui::EndTable();
                             }
 
-                            if (state.currentFeature->AccessToReactiveMask() && currentBackend != "dlss")
+                            if (currentFeature->AccessToReactiveMask() && currentBackend != "dlss")
                             {
                                 ImGui::BeginDisabled(config->DisableReactiveMask.value_or(currentBackend == "xess"));
 
@@ -5513,7 +5511,7 @@ bool MenuCommon::RenderMenu()
 
                     ImGui::SameLine(0.0f, 4.0f);
 
-                    ImGui::Text("%d", state.currentFeature->FrameCount());
+                    ImGui::Text("%d", currentFeature->FrameCount());
 
                     ImGui::SameLine(0.0f, 10.0f);
                 }
@@ -5626,12 +5624,12 @@ bool MenuCommon::RenderMenu()
                 {
                     if (config->OutputScalingEnabled.value_or_default())
                     {
-                        _displayWidth = static_cast<uint32_t>(state.currentFeature->DisplayWidth() *
+                        _displayWidth = static_cast<uint32_t>(currentFeature->DisplayWidth() *
                                                               config->OutputScalingMultiplier.value_or_default());
                     }
                     else
                     {
-                        _displayWidth = state.currentFeature->DisplayWidth();
+                        _displayWidth = currentFeature->DisplayWidth();
                     }
 
                     _renderWidth = static_cast<uint32_t>(_displayWidth / 3.0f);
@@ -5652,12 +5650,12 @@ bool MenuCommon::RenderMenu()
                             if (config->OutputScalingEnabled.value_or_default())
                             {
                                 _displayWidth =
-                                    static_cast<uint32_t>(state.currentFeature->DisplayWidth() *
+                                    static_cast<uint32_t>(currentFeature->DisplayWidth() *
                                                           config->OutputScalingMultiplier.value_or_default());
                             }
                             else
                             {
-                                _displayWidth = state.currentFeature->DisplayWidth();
+                                _displayWidth = currentFeature->DisplayWidth();
                             }
                         }
 
