@@ -366,9 +366,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureInstanceExtensionRequi
     {
         LOG_DEBUG("OutExtensionCount != nullptr: {}", OutExtensionCount != nullptr);
 
-        if ((FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling ||
-             FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration) &&
-            OutExtensionCount != nullptr)
+        if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration)
+            return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
+        if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling && OutExtensionCount != nullptr)
         {
             if (OutExtensionProperties == nullptr)
             {
@@ -449,11 +450,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureDeviceExtensionRequire
     }
     else
     {
+        if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration)
+            return NVSDK_NGX_Result_FAIL_InvalidParameter;
+
         LOG_DEBUG("OutExtensionCount != nullptr: {}", OutExtensionCount != nullptr);
 
-        if ((FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling ||
-             FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration) &&
-            OutExtensionCount != nullptr)
+        if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling && OutExtensionCount != nullptr)
         {
             if (OutExtensionProperties == nullptr)
             {
